@@ -81,12 +81,6 @@ st.markdown("""
         padding: 1rem 1.5rem;
         margin: 0.5rem 0;
     }
-    .table-container {
-        background: white;
-        border-radius: 8px;
-        padding: 0.5rem;
-        border: 1px solid #e0e0e0;
-    }
     .footer {
         text-align: center;
         color: #8888aa;
@@ -106,7 +100,7 @@ st.markdown('<div class="main-subtitle">Análisis y Simulación del Proceso de A
 st.divider()
 
 # =====================================================
-# 1. DIAGRAMA BPMN
+# 1. DIAGRAMA BPMN - VERSIÓN CORREGIDA
 # =====================================================
 st.markdown('<div class="section-title">Diagrama BPMN del Proceso</div>', unsafe_allow_html=True)
 
@@ -114,10 +108,10 @@ st.markdown('<div class="section-title">Diagrama BPMN del Proceso</div>', unsafe
 with open("banco_abc.bpmn", "r", encoding="utf-8") as f:
     bpmn_xml = f.read()
 
-# Escapar el XML para JavaScript (evita problemas con comillas y saltos de línea)
+# Escapar el XML para JavaScript
 bpmn_xml_escaped = bpmn_xml.replace("\\", "\\\\").replace("`", "\\`").replace("$", "\\$")
 
-# HTML con bpmn-js y soporte para zoom/arrastre
+# HTML con bpmn-js y zoom nativo
 html_viewer = f"""
 <!DOCTYPE html>
 <html>
@@ -173,6 +167,11 @@ html_viewer = f"""
             accent-color: #2b6cb0;
             cursor: pointer;
         }}
+        .error-message {{
+            color: #c0392b;
+            padding: 20px;
+            text-align: center;
+        }}
     </style>
 </head>
 <body>
@@ -180,79 +179,117 @@ html_viewer = f"""
         <div id="canvas"></div>
     </div>
     <div class="controls">
-        <button onclick="zoomIn()">➕ Zoom In</button>
-        <button onclick="zoomOut()">➖ Zoom Out</button>
-        <button onclick="resetZoom()">⟲ Reset</button>
+        <button onclick="zoomIn()">Zoom In</button>
+        <button onclick="zoomOut()">Zoom Out</button>
+        <button onclick="resetZoom()">Reset</button>
         <span class="zoom-label">Zoom: <span id="zoomLevel">100</span>%</span>
         <input type="range" id="zoomSlider" min="20" max="200" value="100" step="5"
                oninput="setZoom(this.value)">
     </div>
     <script>
-        // Inicializar viewer con zoom y arrastre
+        // Inicializar el viewer sin extensiones externas
         const viewer = new BpmnJS({{
             container: '#canvas',
             width: '100%',
-            height: '100%',
-            additionalModules: [
-                BpmnJSZoomScroll
-            ]
+            height: '100%'
         }});
 
         const bpmnXml = `{bpmn_xml_escaped}`;
 
-        viewer.importXML(bpmnXml).then(function() {{
-            const canvas = viewer.get('canvas');
-            canvas.zoom('fit-viewport');
-            updateZoomDisplay();
-        }}).catch(function(err) {{
-            console.error('Error loading BPMN:', err);
-            document.getElementById('canvas').innerHTML = 
-                '<p style="color:#c0392b; padding:20px; text-align:center;">Error al cargar el diagrama. Verifica el archivo BPMN.</p>';
-        }});
+        // Función para actualizar el display del zoom
+        function updateZoomDisplay() {{
+            try {{
+                const canvas = viewer.get('canvas');
+                const zoom = canvas.zoom();
+                const percent = Math.round(zoom * 100);
+                document.getElementById('zoomLevel').textContent = percent;
+                document.getElementById('zoomSlider').value = percent;
+            }} catch(e) {{
+                // Ignorar errores si aún no está cargado
+            }}
+        }}
 
+        // Cargar el diagrama
+        viewer.importXML(bpmnXml)
+            .then(function() {{
+                const canvas = viewer.get('canvas');
+                canvas.zoom('fit-viewport');
+                setTimeout(updateZoomDisplay, 100);
+            }})
+            .catch(function(err) {{
+                console.error('Error loading BPMN:', err);
+                document.getElementById('canvas').innerHTML = 
+                    '<p class="error-message">Error al cargar el diagrama.</p>';
+            }});
+
+        // Funciones de zoom
         function getZoom() {{
-            const canvas = viewer.get('canvas');
-            return canvas.zoom();
+            try {{
+                const canvas = viewer.get('canvas');
+                return canvas.zoom();
+            }} catch(e) {{
+                return 1.0;
+            }}
         }}
 
         function setZoom(value) {{
-            const canvas = viewer.get('canvas');
-            canvas.zoom(parseFloat(value) / 100);
-            document.getElementById('zoomLevel').textContent = Math.round(value);
-            document.getElementById('zoomSlider').value = value;
-        }}
-
-        function updateZoomDisplay() {{
-            const zoom = getZoom();
-            const percent = Math.round(zoom * 100);
-            document.getElementById('zoomLevel').textContent = percent;
-            document.getElementById('zoomSlider').value = percent;
+            try {{
+                const canvas = viewer.get('canvas');
+                const zoomVal = parseFloat(value) / 100;
+                canvas.zoom(zoomVal);
+                document.getElementById('zoomLevel').textContent = Math.round(value);
+            }} catch(e) {{
+                // Ignorar
+            }}
         }}
 
         function zoomIn() {{
-            const canvas = viewer.get('canvas');
-            const newZoom = Math.min(canvas.zoom() * 1.2, 2.0);
-            canvas.zoom(newZoom);
-            updateZoomDisplay();
+            try {{
+                const canvas = viewer.get('canvas');
+                const currentZoom = canvas.zoom();
+                const newZoom = Math.min(currentZoom * 1.2, 2.0);
+                canvas.zoom(newZoom);
+                setTimeout(updateZoomDisplay, 50);
+            }} catch(e) {{
+                // Ignorar
+            }}
         }}
 
         function zoomOut() {{
-            const canvas = viewer.get('canvas');
-            const newZoom = Math.max(canvas.zoom() / 1.2, 0.2);
-            canvas.zoom(newZoom);
-            updateZoomDisplay();
+            try {{
+                const canvas = viewer.get('canvas');
+                const currentZoom = canvas.zoom();
+                const newZoom = Math.max(currentZoom / 1.2, 0.2);
+                canvas.zoom(newZoom);
+                setTimeout(updateZoomDisplay, 50);
+            }} catch(e) {{
+                // Ignorar
+            }}
         }}
 
         function resetZoom() {{
-            const canvas = viewer.get('canvas');
-            canvas.zoom('fit-viewport');
-            updateZoomDisplay();
+            try {{
+                const canvas = viewer.get('canvas');
+                canvas.zoom('fit-viewport');
+                setTimeout(updateZoomDisplay, 50);
+            }} catch(e) {{
+                // Ignorar
+            }}
         }}
 
-        // Actualizar display después de interacciones del usuario
+        // Escuchar eventos de zoom del canvas
         viewer.on('canvas.zoom', function() {{
-            updateZoomDisplay();
+            setTimeout(updateZoomDisplay, 50);
         }});
+
+        // Intentar actualizar el display después de la carga
+        setTimeout(function() {{
+            try {{
+                updateZoomDisplay();
+            }} catch(e) {{
+                // Ignorar
+            }}
+        }}, 500);
     </script>
 </body>
 </html>
@@ -348,38 +385,20 @@ st.divider()
 # =====================================================
 st.markdown('<div class="section-title">Utilización de Recursos</div>', unsafe_allow_html=True)
 
-recursos_data = []
 for nombre, utilizacion in recursos.items():
-    if utilizacion > 85:
-        estado = "Saturado"
-        color = "#dc3545"
-    elif utilizacion > 60:
-        estado = "Medio"
-        color = "#f39c12"
-    else:
-        estado = "Normal"
-        color = "#38a169"
-    
-    # Barra de progreso personalizada
-    barra = "█" * int(utilizacion / 5) + "░" * (20 - int(utilizacion / 5))
-    
-    recursos_data.append({
-        "Recurso": nombre,
-        "Utilización": f"{utilizacion:.2f}%",
-        "Estado": estado,
-        "Barra": barra
-    })
-
-# Mostrar como tabla simple
-for item in recursos_data:
     col1, col2, col3 = st.columns([3, 1, 1])
     with col1:
-        st.write(f"**{item['Recurso']}**")
-        st.progress(float(item['Utilización'].replace('%', '')) / 100, text=f"{item['Utilización']}")
+        st.write(f"**{nombre}**")
+        st.progress(utilizacion / 100, text=f"{utilizacion:.2f}%")
     with col2:
-        st.write(item['Estado'])
+        if utilizacion > 85:
+            st.write("🔴 Saturado")
+        elif utilizacion > 60:
+            st.write("🟡 Medio")
+        else:
+            st.write("🟢 Normal")
     with col3:
-        st.write(item['Utilización'])
+        st.write(f"{utilizacion:.2f}%")
     st.divider()
 
 # =====================================================
@@ -400,7 +419,7 @@ if distribucion:
     ax1.set_title("Cantidad de Clientes", fontsize=14, fontweight=600)
     ax1.set_ylabel("Número de clientes", fontsize=12)
     ax1.set_xlabel("Tipo de consulta", fontsize=12)
-    for i, (bar, v) in enumerate(zip(bars, valores)):
+    for bar, v in zip(bars, valores):
         ax1.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 8, str(v), 
                 ha="center", fontweight=600, fontsize=11)
 
@@ -424,13 +443,10 @@ st.markdown('<div class="section-title">Tiempos de Espera por Tipo de Consulta</
 
 tiempos_espera = resultados.get("tiempos_espera", {})
 if tiempos_espera:
-    # Crear tabla en formato de columnas
-    col1, col2, col3 = st.columns(3)
-    cols = [col1, col2, col3]
-    
+    cols = st.columns(len(tiempos_espera))
     for idx, (tipo, tiempo) in enumerate(tiempos_espera.items()):
         nombre = tipo.replace("ATENDER CONSULTA ", "").replace("INVERSION", "Inversión").replace("PRESTAMO", "Préstamo").replace("PLAZO FIJO", "Plazo Fijo")
-        with cols[idx % 3]:
+        with cols[idx]:
             st.markdown(f"""
             <div style="background:#f8f9fa; border-radius:8px; padding:0.8rem 1rem; border:1px solid #e0e0e0; text-align:center;">
                 <div style="font-size:0.85rem; color:#6c6c8a; font-weight:500; text-transform:uppercase; letter-spacing:0.3px;">{nombre}</div>
@@ -471,8 +487,8 @@ with col_sol2:
         <div style="font-weight:600; font-size:1.1rem; color:#2b6cb0;">Impacto esperado</div>
         <table style="width:100%; margin-top:0.5rem; border-collapse:collapse; font-size:0.95rem;">
             <tr><td style="padding:4px 0;"><strong>Time</strong></td><td style="padding:4px 0; color:#38a169;">✅ Reducción a ~1.2 días</td></tr>
-            <tr><td style="padding:4px 0;"><strong>Cost</strong></td><td style="padding:4px 0; color:#d69e2e;">⚠️ +$5.800/hora (nuevo recurso)</td></tr>
-            <tr><td style="padding:4px 0;"><strong>Quality</strong></td><td style="padding:4px 0; color:#38a169;">✅ Mejora en satisfacción</td></tr>
+            <tr><td style="padding:4px 0;"><strong>Cost</strong></td><td style="padding:4px 0; color:#d69e2e;">⚠️ +$5.800/hora</td></tr>
+            <tr><td style="padding:4px 0;"><strong>Quality</strong></td><td style="padding:4px 0; color:#38a169;">✅ Mejora</td></tr>
             <tr><td style="padding:4px 0;"><strong>Flexibility</strong></td><td style="padding:4px 0; color:#38a169;">✅ Mayor resiliencia</td></tr>
         </table>
     </div>
