@@ -1,0 +1,23 @@
+{
+    "instancias": 1000,
+    "costo_total": 3709518.20,
+    "costo_promedio": 3709.52,
+    "tiempo_ciclo_promedio": 1.2,
+    "tiempo_ciclo_texto": "1.2 días",
+    "recursos": {
+        "ADMINISTRATIVO PRÉSTAMOS (1 recurso)": 99.71,
+        "JEFE DE INVERSIONES (1 recurso)": 50.78,
+        "ADMINISTRATIVO PLAZO FIJO (1 recurso)": 39.42,
+        "ADMINISTRATIVO ATENCIÓN INICIAL (2 recursos)": 9.93
+    },
+    "tiempos_espera": {
+        "ATENDER CONSULTA PRÉSTAMO": 2.8,
+        "ATENDER CONSULTA INVERSIÓN": 6.5,
+        "ATENDER CONSULTA PLAZO FIJO": 0.8
+    },
+    "distribucion_clientes": {
+        "Plazo Fijo": 455,
+        "Préstamos": 380,
+        "Inversiones": 165
+    }
+}
