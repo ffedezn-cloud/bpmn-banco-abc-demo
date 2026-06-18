@@ -2,29 +2,122 @@ import streamlit as st
 import json
 import matplotlib.pyplot as plt
 import numpy as np
+import base64
 
 # =====================================================
 # CONFIGURACIÓN DE LA PÁGINA
 # =====================================================
 st.set_page_config(
-    page_title="📋 Simulación BPMN - Banco ABC",
+    page_title="Simulación BPMN - Banco ABC",
     page_icon="🏦",
     layout="wide"
 )
 
-st.title("🏦 Banco ABC - Análisis y Simulación de Procesos BPMN")
-st.markdown("---")
+# Estilos CSS personalizados para un look más limpio
+st.markdown("""
+<style>
+    .main-title {
+        font-size: 2.5rem;
+        font-weight: 600;
+        color: #1a1a2e;
+        margin-bottom: 0.2rem;
+    }
+    .main-subtitle {
+        font-size: 1.1rem;
+        color: #4a4a6a;
+        margin-bottom: 2rem;
+    }
+    .section-title {
+        font-size: 1.4rem;
+        font-weight: 500;
+        color: #2d2d44;
+        border-bottom: 2px solid #e0e0e0;
+        padding-bottom: 0.5rem;
+        margin-top: 1.5rem;
+        margin-bottom: 1rem;
+    }
+    .metric-card {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 1rem 1.2rem;
+        text-align: center;
+        border: 1px solid #e0e0e0;
+    }
+    .metric-value {
+        font-size: 1.8rem;
+        font-weight: 600;
+        color: #1a1a2e;
+    }
+    .metric-label {
+        font-size: 0.85rem;
+        color: #6c6c8a;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .bottleneck-card {
+        background: #fff5f5;
+        border-left: 4px solid #dc3545;
+        border-radius: 8px;
+        padding: 1rem 1.5rem;
+        margin: 0.5rem 0;
+    }
+    .bottleneck-title {
+        font-weight: 600;
+        color: #dc3545;
+        font-size: 1.1rem;
+    }
+    .info-card {
+        background: #f0f7ff;
+        border-left: 4px solid #2b6cb0;
+        border-radius: 8px;
+        padding: 1rem 1.5rem;
+        margin: 0.5rem 0;
+    }
+    .success-card {
+        background: #f0fff4;
+        border-left: 4px solid #38a169;
+        border-radius: 8px;
+        padding: 1rem 1.5rem;
+        margin: 0.5rem 0;
+    }
+    .table-container {
+        background: white;
+        border-radius: 8px;
+        padding: 0.5rem;
+        border: 1px solid #e0e0e0;
+    }
+    .footer {
+        text-align: center;
+        color: #8888aa;
+        font-size: 0.8rem;
+        margin-top: 3rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid #e0e0e0;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # =====================================================
-# 1. DIAGRAMA BPMN (cargado desde archivo fijo)
+# ENCABEZADO
 # =====================================================
-st.header("📐 Diagrama BPMN del Proceso")
+st.markdown('<div class="main-title">Banco ABC</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-subtitle">Análisis y Simulación del Proceso de Atención al Cliente</div>', unsafe_allow_html=True)
+st.divider()
+
+# =====================================================
+# 1. DIAGRAMA BPMN
+# =====================================================
+st.markdown('<div class="section-title">Diagrama BPMN del Proceso</div>', unsafe_allow_html=True)
 
 # Leer el archivo BPMN fijo
 with open("banco_abc.bpmn", "r", encoding="utf-8") as f:
     bpmn_xml = f.read()
 
-# HTML para visualizar el diagrama con bpmn-js (con scroll)
+# Escapar el XML para JavaScript (evita problemas con comillas y saltos de línea)
+bpmn_xml_escaped = bpmn_xml.replace("\\", "\\\\").replace("`", "\\`").replace("$", "\\$")
+
+# HTML con bpmn-js y soporte para zoom/arrastre
 html_viewer = f"""
 <!DOCTYPE html>
 <html>
@@ -32,26 +125,140 @@ html_viewer = f"""
     <meta charset="UTF-8">
     <script src="https://unpkg.com/bpmn-js@11.5.0/dist/bpmn-viewer.development.js"></script>
     <style>
-        body {{ margin: 0; padding: 0; background: #f8f9fa; }}
-        #canvas {{ height: 700px; width: 100%; background: white; border: 1px solid #ddd; border-radius: 8px; overflow: auto; }}
+        body {{ margin: 0; padding: 0; background: #f5f6fa; font-family: sans-serif; }}
+        #canvas-container {{
+            height: 600px;
+            width: 100%;
+            background: white;
+            border: 1px solid #d0d0d0;
+            border-radius: 10px;
+            overflow: auto;
+            position: relative;
+        }}
+        #canvas {{
+            height: 100%;
+            width: 100%;
+            min-height: 500px;
+        }}
+        .controls {{
+            display: flex;
+            gap: 10px;
+            padding: 10px 0;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+        }}
+        .controls button {{
+            padding: 6px 16px;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: 0.2s;
+        }}
+        .controls button:hover {{
+            background: #e8e8e8;
+            border-color: #999;
+        }}
+        .controls .zoom-label {{
+            font-size: 13px;
+            color: #555;
+            font-weight: 500;
+            margin: 0 5px;
+        }}
+        .controls input[type="range"] {{
+            width: 120px;
+            accent-color: #2b6cb0;
+            cursor: pointer;
+        }}
     </style>
 </head>
 <body>
-    <div id="canvas" style="height:700px; overflow:auto;"></div>
+    <div id="canvas-container">
+        <div id="canvas"></div>
+    </div>
+    <div class="controls">
+        <button onclick="zoomIn()">➕ Zoom In</button>
+        <button onclick="zoomOut()">➖ Zoom Out</button>
+        <button onclick="resetZoom()">⟲ Reset</button>
+        <span class="zoom-label">Zoom: <span id="zoomLevel">100</span>%</span>
+        <input type="range" id="zoomSlider" min="20" max="200" value="100" step="5"
+               oninput="setZoom(this.value)">
+    </div>
     <script>
+        // Inicializar viewer con zoom y arrastre
         const viewer = new BpmnJS({{
             container: '#canvas',
             width: '100%',
-            height: 700
+            height: '100%',
+            additionalModules: [
+                BpmnJSZoomScroll
+            ]
         }});
-        const bpmnXml = `{bpmn_xml}`;
-        viewer.importXML(bpmnXml).catch(err => console.error(err));
+
+        const bpmnXml = `{bpmn_xml_escaped}`;
+
+        viewer.importXML(bpmnXml).then(function() {{
+            const canvas = viewer.get('canvas');
+            canvas.zoom('fit-viewport');
+            updateZoomDisplay();
+        }}).catch(function(err) {{
+            console.error('Error loading BPMN:', err);
+            document.getElementById('canvas').innerHTML = 
+                '<p style="color:#c0392b; padding:20px; text-align:center;">Error al cargar el diagrama. Verifica el archivo BPMN.</p>';
+        }});
+
+        function getZoom() {{
+            const canvas = viewer.get('canvas');
+            return canvas.zoom();
+        }}
+
+        function setZoom(value) {{
+            const canvas = viewer.get('canvas');
+            canvas.zoom(parseFloat(value) / 100);
+            document.getElementById('zoomLevel').textContent = Math.round(value);
+            document.getElementById('zoomSlider').value = value;
+        }}
+
+        function updateZoomDisplay() {{
+            const zoom = getZoom();
+            const percent = Math.round(zoom * 100);
+            document.getElementById('zoomLevel').textContent = percent;
+            document.getElementById('zoomSlider').value = percent;
+        }}
+
+        function zoomIn() {{
+            const canvas = viewer.get('canvas');
+            const newZoom = Math.min(canvas.zoom() * 1.2, 2.0);
+            canvas.zoom(newZoom);
+            updateZoomDisplay();
+        }}
+
+        function zoomOut() {{
+            const canvas = viewer.get('canvas');
+            const newZoom = Math.max(canvas.zoom() / 1.2, 0.2);
+            canvas.zoom(newZoom);
+            updateZoomDisplay();
+        }}
+
+        function resetZoom() {{
+            const canvas = viewer.get('canvas');
+            canvas.zoom('fit-viewport');
+            updateZoomDisplay();
+        }}
+
+        // Actualizar display después de interacciones del usuario
+        viewer.on('canvas.zoom', function() {{
+            updateZoomDisplay();
+        }});
     </script>
 </body>
 </html>
 """
 
-st.components.v1.html(html_viewer, height=750, scrolling=True)
+st.components.v1.html(html_viewer, height=650, scrolling=False)
 
 # =====================================================
 # 2. CARGAR RESULTADOS
@@ -66,34 +273,41 @@ except Exception as e:
 # =====================================================
 # 3. MÉTRICAS PRINCIPALES
 # =====================================================
-st.header("📊 Resultados de la Simulación")
+st.markdown('<div class="section-title">Resultados de la Simulación</div>', unsafe_allow_html=True)
 
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    st.metric(
-        "⏱️ Tiempo de ciclo promedio",
-        resultados.get("tiempo_ciclo_texto", "1.2 días")
-    )
+    st.markdown(f"""
+    <div class="metric-card">
+        <div class="metric-label">Tiempo de ciclo promedio</div>
+        <div class="metric-value">{resultados.get('tiempo_ciclo_texto', '1.2 días')}</div>
+    </div>
+    """, unsafe_allow_html=True)
 
 with col2:
-    st.metric(
-        "💰 Costo total",
-        f"${resultados.get('costo_total', 0):,.2f}"
-    )
+    st.markdown(f"""
+    <div class="metric-card">
+        <div class="metric-label">Costo total</div>
+        <div class="metric-value">${resultados.get('costo_total', 0):,.2f}</div>
+    </div>
+    """, unsafe_allow_html=True)
 
 with col3:
-    st.metric(
-        "👥 Clientes simulados",
-        resultados.get("instancias", 1000),
-        delta="6 meses"
-    )
+    st.markdown(f"""
+    <div class="metric-card">
+        <div class="metric-label">Clientes simulados</div>
+        <div class="metric-value">{resultados.get('instancias', 1000)}</div>
+        <div style="font-size:0.8rem; color:#6c6c8a;">(6 meses)</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+st.divider()
 
 # =====================================================
 # 4. CUELLO DE BOTELLA
 # =====================================================
-st.markdown("---")
-st.header("🚨 Cuello de Botella Detectado")
+st.markdown('<div class="section-title">Cuello de Botella Detectado</div>', unsafe_allow_html=True)
 
 recursos = resultados.get("recursos", {})
 if recursos:
@@ -106,63 +320,99 @@ else:
 col_b1, col_b2 = st.columns([1, 2])
 
 with col_b1:
-    st.warning(f"**{recurso_bottleneck}**")
-    st.metric(
-        "Utilización",
-        f"{utilizacion_bottleneck:.2f}%",
-        delta="⚠️ Saturado" if utilizacion_bottleneck > 85 else "🟡 Monitorear"
-    )
+    st.markdown(f"""
+    <div class="bottleneck-card">
+        <div class="bottleneck-title">{recurso_bottleneck}</div>
+        <div style="font-size:2rem; font-weight:600; color:#dc3545;">{utilizacion_bottleneck:.2f}%</div>
+        <div style="color:#6c6c8a; font-size:0.9rem;">Utilización</div>
+        <div style="color:#dc3545; font-weight:500; margin-top:0.3rem;">Saturado</div>
+    </div>
+    """, unsafe_allow_html=True)
 
 with col_b2:
-    st.info("""
-    **Impacto en el proceso:**
-    - Los clientes que consultan por **préstamos** (38% del total)
-    - Esperan en promedio **2.8 días** para ser atendidos
-    - Esto genera insatisfacción y posibles pérdidas de clientes
-    """)
+    st.markdown("""
+    <div class="info-card">
+        <strong style="color:#2b6cb0;">Impacto en el proceso</strong>
+        <ul style="margin:0.5rem 0; padding-left:1.2rem;">
+            <li>Los clientes que consultan por <strong>préstamos</strong> (38% del total)</li>
+            <li>Esperan en promedio <strong>2.8 días</strong> para ser atendidos</li>
+            <li>Esto genera insatisfacción y posibles pérdidas de clientes</li>
+        </ul>
+    </div>
+    """, unsafe_allow_html=True)
+
+st.divider()
 
 # =====================================================
 # 5. UTILIZACIÓN DE RECURSOS
 # =====================================================
-st.subheader("📈 Utilización de Recursos")
+st.markdown('<div class="section-title">Utilización de Recursos</div>', unsafe_allow_html=True)
 
 recursos_data = []
 for nombre, utilizacion in recursos.items():
     if utilizacion > 85:
-        estado = "🔴 Saturado"
+        estado = "Saturado"
+        color = "#dc3545"
     elif utilizacion > 60:
-        estado = "🟡 Medio"
+        estado = "Medio"
+        color = "#f39c12"
     else:
-        estado = "🟢 Normal"
+        estado = "Normal"
+        color = "#38a169"
+    
+    # Barra de progreso personalizada
+    barra = "█" * int(utilizacion / 5) + "░" * (20 - int(utilizacion / 5))
+    
     recursos_data.append({
         "Recurso": nombre,
         "Utilización": f"{utilizacion:.2f}%",
-        "Estado": estado
+        "Estado": estado,
+        "Barra": barra
     })
 
-st.table(recursos_data)
+# Mostrar como tabla simple
+for item in recursos_data:
+    col1, col2, col3 = st.columns([3, 1, 1])
+    with col1:
+        st.write(f"**{item['Recurso']}**")
+        st.progress(float(item['Utilización'].replace('%', '')) / 100, text=f"{item['Utilización']}")
+    with col2:
+        st.write(item['Estado'])
+    with col3:
+        st.write(item['Utilización'])
+    st.divider()
 
 # =====================================================
 # 6. DISTRIBUCIÓN DE CLIENTES
 # =====================================================
-st.subheader("📊 Distribución de Clientes por Tipo de Consulta")
+st.markdown('<div class="section-title">Distribución de Clientes por Tipo de Consulta</div>', unsafe_allow_html=True)
 
 distribucion = resultados.get("distribucion_clientes", {})
 if distribucion:
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4.5))
 
     tipos = list(distribucion.keys())
     valores = list(distribucion.values())
-    colores_barra = ["#ff6b6b", "#4ecdc4", "#45b7d1"]
+    colores_barra = ["#e74c3c", "#3498db", "#2ecc71"]
 
-    ax1.bar(tipos, valores, color=colores_barra, edgecolor="black", linewidth=1)
-    ax1.set_title("Cantidad de Clientes por Tipo")
-    ax1.set_ylabel("Número de clientes")
-    for i, v in enumerate(valores):
-        ax1.text(i, v + 10, str(v), ha="center", fontweight="bold")
+    # Gráfico de barras
+    bars = ax1.bar(tipos, valores, color=colores_barra, edgecolor="white", linewidth=1.5)
+    ax1.set_title("Cantidad de Clientes", fontsize=14, fontweight=600)
+    ax1.set_ylabel("Número de clientes", fontsize=12)
+    ax1.set_xlabel("Tipo de consulta", fontsize=12)
+    for i, (bar, v) in enumerate(zip(bars, valores)):
+        ax1.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 8, str(v), 
+                ha="center", fontweight=600, fontsize=11)
 
-    ax2.pie(valores, labels=tipos, autopct="%1.1f%%", colors=colores_barra, startangle=90)
-    ax2.set_title("Proporción de Clientes por Tipo")
+    # Gráfico de torta
+    wedges, texts, autotexts = ax2.pie(valores, labels=tipos, autopct="%1.1f%%", 
+                                       colors=colores_barra, startangle=90,
+                                       textprops={'fontsize': 11, 'fontweight': 500})
+    for autotext in autotexts:
+        autotext.set_color('white')
+        autotext.set_fontweight('bold')
+        autotext.set_fontsize(12)
+    ax2.set_title("Proporción de Clientes", fontsize=14, fontweight=600)
 
     plt.tight_layout()
     st.pyplot(fig)
@@ -170,60 +420,94 @@ if distribucion:
 # =====================================================
 # 7. TIEMPOS DE ESPERA
 # =====================================================
-st.subheader("⏱️ Tiempos de Espera por Tipo de Consulta")
+st.markdown('<div class="section-title">Tiempos de Espera por Tipo de Consulta</div>', unsafe_allow_html=True)
 
 tiempos_espera = resultados.get("tiempos_espera", {})
 if tiempos_espera:
-    tiempos_data = []
-    for tipo, tiempo in tiempos_espera.items():
-        nombre = tipo.replace("ATENDER CONSULTA ", "").replace("INVERSION", "INVERSIÓN").replace("PRESTAMO", "PRÉSTAMO")
-        tiempos_data.append({
-            "Tipo de consulta": nombre,
-            "Tiempo de espera": f"{tiempo} días"
-        })
-    st.table(tiempos_data)
+    # Crear tabla en formato de columnas
+    col1, col2, col3 = st.columns(3)
+    cols = [col1, col2, col3]
+    
+    for idx, (tipo, tiempo) in enumerate(tiempos_espera.items()):
+        nombre = tipo.replace("ATENDER CONSULTA ", "").replace("INVERSION", "Inversión").replace("PRESTAMO", "Préstamo").replace("PLAZO FIJO", "Plazo Fijo")
+        with cols[idx % 3]:
+            st.markdown(f"""
+            <div style="background:#f8f9fa; border-radius:8px; padding:0.8rem 1rem; border:1px solid #e0e0e0; text-align:center;">
+                <div style="font-size:0.85rem; color:#6c6c8a; font-weight:500; text-transform:uppercase; letter-spacing:0.3px;">{nombre}</div>
+                <div style="font-size:1.6rem; font-weight:600; color:#2d2d44;">{tiempo}</div>
+                <div style="font-size:0.8rem; color:#6c6c8a;">días</div>
+            </div>
+            """, unsafe_allow_html=True)
 
 # =====================================================
 # 8. PROPUESTA DE REDISEÑO
 # =====================================================
-st.markdown("---")
-st.header("🔄 Propuesta de Rediseño")
+st.divider()
+st.markdown('<div class="section-title">Propuesta de Rediseño</div>', unsafe_allow_html=True)
 
 st.markdown(f"""
-### 🎯 Problema identificado
-El recurso **{recurso_bottleneck}** está saturado al **{utilizacion_bottleneck:.2f}%**, 
-generando tiempos de espera de **2.8 días** para los clientes de préstamos.
+<div style="background:#f8fafc; border-radius:10px; padding:1.5rem; border:1px solid #e0e0e0; margin-bottom:1rem;">
+    <div style="font-weight:600; font-size:1.1rem; color:#2b6cb0;">Problema identificado</div>
+    <p>El recurso <strong>{recurso_bottleneck}</strong> está saturado al <strong>{utilizacion_bottleneck:.2f}%</strong>, generando tiempos de espera de <strong>2.8 días</strong> para los clientes de préstamos.</p>
+</div>
+""", unsafe_allow_html=True)
 
-### 💡 Solución propuesta
-Aplicando la heurística **"Case assignment"** del Capítulo 8 de Dumas et al. (2018):
+col_sol1, col_sol2 = st.columns([2, 1])
 
-> **Agregar un segundo Administrativo de Préstamos** (pasar de 1 a 2 recursos)
+with col_sol1:
+    st.markdown(f"""
+    <div style="background:#f0fff4; border-radius:10px; padding:1.5rem; border:1px solid #c6f6d5;">
+        <div style="font-weight:600; font-size:1.1rem; color:#2f855a;">Solución propuesta</div>
+        <p style="margin-top:0.5rem;">Aplicando la heurística <strong>"Case assignment"</strong> del Capítulo 8 de Dumas et al. (2018):</p>
+        <blockquote style="background:white; border-radius:6px; padding:0.8rem 1.2rem; border-left:4px solid #38a169; margin:0.5rem 0;">
+            Agregar un segundo Administrativo de Préstamos (pasar de 1 a 2 recursos)
+        </blockquote>
+    </div>
+    """, unsafe_allow_html=True)
 
-### 📊 Impacto esperado
-
-| Dimensión | Impacto |
-|-----------|---------|
-| **Time** | ✅ Reducción de 2.8 días a ~1.2 días |
-| **Cost** | ⚠️ Aumento del costo en $5.800/hora (nuevo recurso) |
-| **Quality** | ✅ Mejora en la satisfacción del cliente |
-| **Flexibility** | ✅ Mayor resiliencia ante picos de demanda |
-""")
+with col_sol2:
+    st.markdown("""
+    <div style="background:#f0f7ff; border-radius:10px; padding:1.5rem; border:1px solid #bee3f8; height:100%;">
+        <div style="font-weight:600; font-size:1.1rem; color:#2b6cb0;">Impacto esperado</div>
+        <table style="width:100%; margin-top:0.5rem; border-collapse:collapse; font-size:0.95rem;">
+            <tr><td style="padding:4px 0;"><strong>Time</strong></td><td style="padding:4px 0; color:#38a169;">✅ Reducción a ~1.2 días</td></tr>
+            <tr><td style="padding:4px 0;"><strong>Cost</strong></td><td style="padding:4px 0; color:#d69e2e;">⚠️ +$5.800/hora (nuevo recurso)</td></tr>
+            <tr><td style="padding:4px 0;"><strong>Quality</strong></td><td style="padding:4px 0; color:#38a169;">✅ Mejora en satisfacción</td></tr>
+            <tr><td style="padding:4px 0;"><strong>Flexibility</strong></td><td style="padding:4px 0; color:#38a169;">✅ Mayor resiliencia</td></tr>
+        </table>
+    </div>
+    """, unsafe_allow_html=True)
 
 # =====================================================
 # 9. CONCLUSIÓN
 # =====================================================
-st.markdown("---")
-st.header("✅ Conclusión")
+st.divider()
+st.markdown('<div class="section-title">Conclusión</div>', unsafe_allow_html=True)
 
-st.success(f"""
-El análisis cualitativo y cuantitativo del proceso de atención al cliente del Banco ABC 
-permitió identificar un **cuello de botella en el Administrativo de Préstamos** con 
-una utilización del {utilizacion_bottleneck:.2f}%.
+st.markdown(f"""
+<div class="success-card">
+    <p style="margin:0; line-height:1.6;">
+        El análisis cualitativo y cuantitativo del proceso de atención al cliente del Banco ABC 
+        permitió identificar un <strong>cuello de botella en el Administrativo de Préstamos</strong> con 
+        una utilización del <strong>{utilizacion_bottleneck:.2f}%</strong>.
+    </p>
+    <p style="margin:0.8rem 0 0 0; line-height:1.6;">
+        La propuesta de rediseño consiste en agregar un segundo Administrativo de Préstamos, 
+        lo que permitiría reducir el tiempo de espera de <strong>2.8 días a 1.2 días</strong> y mejorar la 
+        satisfacción del cliente.
+    </p>
+    <p style="margin:0.8rem 0 0 0; line-height:1.6;">
+        El costo total del proceso para 1000 clientes es de <strong>${resultados.get('costo_total', 0):,.2f}</strong> 
+        con un costo promedio de <strong>${resultados.get('costo_promedio', 0):.2f}</strong> por cliente.
+    </p>
+</div>
+""", unsafe_allow_html=True)
 
-La propuesta de rediseño consiste en agregar un segundo Administrativo de Préstamos, 
-lo que permitiría reducir el tiempo de espera de 2.8 días a 1.2 días y mejorar la 
-satisfacción del cliente.
-
-El costo total del proceso para 1000 clientes es de **${resultados.get('costo_total', 0):,.2f}** 
-con un costo promedio de **${resultados.get('costo_promedio', 0):.2f}** por cliente.
-""")
+# =====================================================
+# FOOTER
+# =====================================================
+st.markdown(f"""
+<div class="footer">
+    Simulación BPMN · Banco ABC · {resultados.get('instancias', 1000)} clientes · 6 meses
+</div>
+""", unsafe_allow_html=True)
