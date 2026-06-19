@@ -392,11 +392,11 @@ for nombre, utilizacion in recursos.items():
         st.progress(utilizacion / 100, text=f"{utilizacion:.2f}%")
     with col2:
         if utilizacion > 85:
-            st.write("🔴 Saturado")
+            st.write("Saturado")
         elif utilizacion > 60:
-            st.write("🟡 Medio")
+            st.write("Medio")
         else:
-            st.write("🟢 Normal")
+            st.write("Normal")
     with col3:
         st.write(f"{utilizacion:.2f}%")
     st.divider()
